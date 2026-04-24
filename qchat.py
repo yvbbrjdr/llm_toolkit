@@ -26,7 +26,7 @@ class Tool:
 class ShellTool(Tool):
     def __init__(self):
         super().__init__(
-            "Execute a shell command on the host and return its stdout and stderr.",
+            "Execute a shell command on the host and return its stdout and stderr. If you need to execute Python code for some task, use this tool.",
             {
                 "type": "object",
                 "properties": {
@@ -236,6 +236,12 @@ def main(args: argparse.Namespace):
                         reasoning_mode = True
                     print(f"\033[90m{reasoning_content}\033[0m", end="", flush=True)
                     has_output = True
+                    if hasattr(delta, "reasoning_content"):
+                        if assistant_message.get("reasoning_content") is None:
+                            assistant_message["reasoning_content"] = ""
+                        assistant_message["reasoning_content"] += (
+                            delta.reasoning_content
+                        )
 
                 content = delta.content
                 if content:
