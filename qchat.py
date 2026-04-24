@@ -109,7 +109,7 @@ class SearchTool(Tool):
 
 
 def main(args: argparse.Namespace):
-    history_file = os.path.expanduser("~/.chat_history")
+    history_file = os.path.expanduser("~/.qchat_history")
     if os.path.exists(history_file):
         readline.read_history_file(history_file)
     atexit.register(readline.write_history_file, history_file)
