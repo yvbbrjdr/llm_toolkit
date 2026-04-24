@@ -10,6 +10,8 @@ import subprocess
 import sys
 
 from openai import OpenAI
+import requests
+import urllib.parse
 
 
 class Tool:
@@ -63,6 +65,50 @@ class ShellTool(Tool):
         return outputs
 
 
+class SearchTool(Tool):
+    def __init__(self, api_key: str):
+        super().__init__(
+            "Search the web and return relevant results with titles, URLs, and content snippets.",
+            {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query.",
+                    },
+                    "page": {
+                        "type": "integer",
+                        "description": "The page of results to return (default 1).",
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        )
+        self._api_key = api_key
+
+    def execute(self, args: dict) -> dict:
+        query = args["query"]
+        page = args.get("page", 1)
+
+        print(f"\033[90mSearching for: {query} (page {page})\033[0m", flush=True)
+
+        encoded = urllib.parse.quote_plus(query)
+        url = f"https://s.jina.ai/{encoded}?page={page}"
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self._api_key}",
+        }
+
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+        except Exception as e:
+            return {"error": str(e)}
+
+        return response.json()
+
+
 def main(args: argparse.Namespace):
     history_file = os.path.expanduser("~/.chat_history")
     if os.path.exists(history_file):
@@ -76,6 +122,11 @@ def main(args: argparse.Namespace):
 
     tools = {
         "shell": ShellTool(),
+        **(
+            {"search": SearchTool(api_key=args.jina_api_key)}
+            if args.jina_api_key
+            else {}
+        ),
     }
 
     print(f"Chatting with {args.model} on {args.api_base}")
@@ -120,7 +171,6 @@ def main(args: argparse.Namespace):
                             "name": name,
                             "description": tool.description,
                             "parameters": tool.parameters,
-                            "strict": True,
                         },
                     }
                     for name, tool in tools.items()
@@ -196,7 +246,8 @@ def main(args: argparse.Namespace):
                     has_output = True
                     assistant_message["content"] += content
         except KeyboardInterrupt:
-            messages = messages[:-2]
+            print()
+            continue
         except Exception as e:
             print(f"\nError during response: {e}", file=sys.stderr)
             continue
@@ -250,6 +301,12 @@ if __name__ == "__main__":
         type=str,
         default=os.environ.get("OPENAI_MODEL", "gpt-5.4"),
         help="Model to use",
+    )
+    parser.add_argument(
+        "--jina-api-key",
+        type=str,
+        default=os.environ.get("JINA_API_KEY"),
+        help="Jina API key for search tool",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
