@@ -96,6 +96,7 @@ class SearchTool(Tool):
         headers = {
             "Accept": "application/json",
             "Authorization": f"Bearer {self._api_key}",
+            "X-Respond-With": "no-content",
         }
 
         try:
