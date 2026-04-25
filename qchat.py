@@ -101,12 +101,12 @@ class ShellTool(Tool):
             pipe.close()
 
         stdout, stderr = [], []
-        threading.Thread(
-            target=forward_output, args=(p.stdout, stdout), daemon=True
-        ).start()
-        threading.Thread(
-            target=forward_output, args=(p.stderr, stderr, True), daemon=True
-        ).start()
+        stdout_thread = threading.Thread(target=forward_output, args=(p.stdout, stdout))
+        stderr_thread = threading.Thread(
+            target=forward_output, args=(p.stderr, stderr, True)
+        )
+        stdout_thread.start()
+        stderr_thread.start()
 
         while True:
             try:
@@ -115,6 +115,8 @@ class ShellTool(Tool):
             except KeyboardInterrupt:
                 p.send_signal(subprocess.signal.SIGINT)
                 print()
+        stdout_thread.join()
+        stderr_thread.join()
         outputs = {
             "returncode": p.returncode,
             "stdout": "".join(stdout),
