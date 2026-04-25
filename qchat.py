@@ -191,12 +191,32 @@ def main(args: argparse.Namespace):
             if not line.strip():
                 continue
 
-            match line.strip():
+            stripped = line.strip()
+
+            if stripped.startswith("!"):
+                cmd = stripped[1:].strip()
+                if not cmd:
+                    print("No command provided.")
+                    continue
+                try:
+                    result = subprocess.run(cmd, shell=True)
+                except Exception:
+                    pass
+                continue
+
+            match stripped:
                 case "/exit" | "/quit":
                     break
                 case "/clear" | "/reset":
                     messages = [system_message]
                     print("Chat history cleared.")
+                    continue
+                case "/shell":
+                    shell = os.environ.get("SHELL", "/bin/bash")
+                    try:
+                        subprocess.run(shell)
+                    except Exception as e:
+                        print(f"Error launching shell: {e}", file=sys.stderr)
                     continue
 
             messages.append({"role": "user", "content": line})
