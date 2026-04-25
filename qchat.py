@@ -8,6 +8,8 @@ import os
 import readline
 import subprocess
 import sys
+import threading
+from typing import IO
 import urllib.parse
 
 from openai import OpenAI
@@ -78,12 +80,34 @@ class ShellTool(Tool):
             user_input = "n"
         if user_input.strip().lower() not in ("y", "yes", ""):
             return {"error": "Command execution cancelled by user."}
+
         p = subprocess.Popen(
             command,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+
+        def forward_output(pipe: IO[bytes], log: list[str], is_stderr=False):
+            for line in iter(pipe.readline, b""):
+                decoded = line.decode()
+                print(
+                    f"\033[90m{decoded}\033[0m",
+                    end="",
+                    flush=True,
+                    file=sys.stderr if is_stderr else sys.stdout,
+                )
+                log.append(decoded)
+            pipe.close()
+
+        stdout, stderr = [], []
+        threading.Thread(
+            target=forward_output, args=(p.stdout, stdout), daemon=True
+        ).start()
+        threading.Thread(
+            target=forward_output, args=(p.stderr, stderr, True), daemon=True
+        ).start()
+
         while True:
             try:
                 p.wait()
@@ -91,16 +115,11 @@ class ShellTool(Tool):
             except KeyboardInterrupt:
                 p.send_signal(subprocess.signal.SIGINT)
                 print()
-        stdout, stderr = p.communicate()
         outputs = {
             "returncode": p.returncode,
-            "stdout": stdout.decode(),
-            "stderr": stderr.decode(),
+            "stdout": "".join(stdout),
+            "stderr": "".join(stderr),
         }
-        print(f"\033[90m{outputs['stdout']}\033[0m", end="", flush=True)
-        print(
-            f"\033[90m{outputs['stderr']}\033[0m", end="", flush=True, file=sys.stderr
-        )
         return outputs
 
 
