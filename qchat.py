@@ -8,10 +8,10 @@ import os
 import readline
 import subprocess
 import sys
+import urllib.parse
 
 from openai import OpenAI
 import requests
-import urllib.parse
 
 
 class Tool:
