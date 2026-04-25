@@ -89,7 +89,7 @@ class SearchTool(Tool):
         query = args["query"]
         page = args.get("page", 1)
 
-        print(f"\033[90mSearching for: {query} (page {page})\033[0m", flush=True)
+        print(f"\033[90mSearching for: {query} (page {page})\033[0m")
 
         encoded = urllib.parse.quote_plus(query)
         url = f"https://s.jina.ai/{encoded}?page={page}"
@@ -97,6 +97,45 @@ class SearchTool(Tool):
             "Accept": "application/json",
             "Authorization": f"Bearer {self._api_key}",
             "X-Respond-With": "no-content",
+        }
+
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+        except Exception as e:
+            return {"error": str(e)}
+
+        return response.json()
+
+
+class BrowseTool(Tool):
+    def __init__(self, api_key: str):
+        super().__init__(
+            "Fetch the content of a web page given its URL. Use this tool when you need to access information from a specific web page.",
+            {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL of the web page to fetch.",
+                    }
+                },
+                "required": ["url"],
+                "additionalProperties": False,
+            },
+        )
+        self._api_key = api_key
+
+    def execute(self, args: dict) -> dict:
+        url = args["url"]
+
+        print(f"\033[90mFetching URL: {url}\033[0m")
+
+        encoded = urllib.parse.quote_plus(url)
+        url = f"https://r.jina.ai/{encoded}"
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self._api_key}",
         }
 
         try:
@@ -122,7 +161,10 @@ def main(args: argparse.Namespace):
     tools = {
         "shell": ShellTool(),
         **(
-            {"search": SearchTool(api_key=args.jina_api_key)}
+            {
+                "search": SearchTool(api_key=args.jina_api_key),
+                "browse": BrowseTool(api_key=args.jina_api_key),
+            }
             if args.jina_api_key
             else {}
         ),
@@ -190,7 +232,7 @@ def main(args: argparse.Namespace):
                 delta = chunk.choices[0].delta
 
                 if args.debug:
-                    print(f"\n[DEBUG] Delta: {delta}\n", flush=True)
+                    print(f"\n[DEBUG] Delta: {delta}\n")
 
                 tool_calls = delta.tool_calls
                 if tool_calls:
