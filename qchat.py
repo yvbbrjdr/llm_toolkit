@@ -74,16 +74,24 @@ class ShellTool(Tool):
         user_input = input(f"Allow execution of command: {command}? [Y/n] ")
         if user_input.strip().lower() not in ("y", "yes", ""):
             return {"error": "Command execution cancelled by user."}
-        result = subprocess.run(
+        p = subprocess.Popen(
             command,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+        while True:
+            try:
+                p.wait()
+                break
+            except KeyboardInterrupt:
+                p.send_signal(subprocess.signal.SIGINT)
+                print()
+        stdout, stderr = p.communicate()
         outputs = {
-            "returncode": result.returncode,
-            "stdout": result.stdout.decode(),
-            "stderr": result.stderr.decode(),
+            "returncode": p.returncode,
+            "stdout": stdout.decode(),
+            "stderr": stderr.decode(),
         }
         print(f"\033[90m{outputs['stdout']}\033[0m", end="", flush=True)
         print(
@@ -242,10 +250,14 @@ def main(args: argparse.Namespace):
                         print(f"cd: {e}", file=sys.stderr)
                     continue
 
-                try:
-                    result = subprocess.run(cmd, shell=True)
-                except Exception:
-                    pass
+                p = subprocess.Popen(cmd, shell=True)
+                while True:
+                    try:
+                        p.wait()
+                        break
+                    except KeyboardInterrupt:
+                        p.send_signal(subprocess.signal.SIGINT)
+                        print()
                 continue
 
             match stripped:
