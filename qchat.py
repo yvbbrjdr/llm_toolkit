@@ -170,18 +170,20 @@ def main(args: argparse.Namespace):
         ),
     }
 
-    print(f"Chatting with {args.model} on {args.api_base}")
-
     system_message = {
         "role": "system",
         "content": f"You are a helpful assistant. Today's date is {datetime.datetime.now().strftime('%Y-%m-%d')}.",
     }
     messages = [system_message]
 
+    user_directory = os.path.expanduser("~")
+
     while True:
         if messages[-1]["role"] in ("assistant", "system"):
             try:
-                line = input(">>> ")
+                line = input(
+                    f"{args.model}:{os.getcwd().replace(user_directory, '~')}$ "
+                )
             except EOFError:
                 print()
                 break
@@ -198,6 +200,16 @@ def main(args: argparse.Namespace):
                 if not cmd:
                     print("No command provided.")
                     continue
+
+                if cmd == "cd" or cmd.startswith("cd "):
+                    parts = cmd.split(maxsplit=1)
+                    target = parts[1] if len(parts) > 1 else user_directory
+                    try:
+                        os.chdir(os.path.expanduser(target))
+                    except Exception as e:
+                        print(f"cd: {e}", file=sys.stderr)
+                    continue
+
                 try:
                     result = subprocess.run(cmd, shell=True)
                 except Exception:
@@ -210,13 +222,6 @@ def main(args: argparse.Namespace):
                 case "/clear" | "/reset":
                     messages = [system_message]
                     print("Chat history cleared.")
-                    continue
-                case "/shell":
-                    shell = os.environ.get("SHELL", "/bin/bash")
-                    try:
-                        subprocess.run(shell)
-                    except Exception as e:
-                        print(f"Error launching shell: {e}", file=sys.stderr)
                     continue
 
             messages.append({"role": "user", "content": line})
