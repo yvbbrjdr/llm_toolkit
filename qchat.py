@@ -71,7 +71,11 @@ class ShellTool(Tool):
 
     def execute(self, args: dict) -> dict:
         command = args["command"]
-        user_input = input(f"Allow execution of command: {command}? [Y/n] ")
+        try:
+            user_input = input(f"Allow execution of command: {command}? [Y/n] ")
+        except EOFError, KeyboardInterrupt:
+            print()
+            user_input = "n"
         if user_input.strip().lower() not in ("y", "yes", ""):
             return {"error": "Command execution cancelled by user."}
         p = subprocess.Popen(
