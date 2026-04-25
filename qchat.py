@@ -23,6 +23,35 @@ class Tool:
         raise NotImplementedError("Tool execution not implemented")
 
 
+class ChdirTool(Tool):
+    def __init__(self):
+        super().__init__(
+            "Change the current working directory. Use this tool to navigate the file system when needed.",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The path to change to. Can be absolute or relative.",
+                    }
+                },
+                "required": ["path"],
+                "additionalProperties": False,
+            },
+        )
+
+    def execute(self, args: dict) -> dict:
+        path = args["path"]
+
+        print(f"\033[90mChanging directory to: {path}\033[0m")
+
+        try:
+            os.chdir(os.path.expanduser(path))
+            return {"success": True, "cwd": getcwd()}
+        except Exception as e:
+            return {"success": False, "error": str(e), "cwd": getcwd()}
+
+
 class ShellTool(Tool):
     def __init__(self):
         super().__init__(
@@ -108,7 +137,7 @@ class SearchTool(Tool):
         return response.json()
 
 
-class BrowseTool(Tool):
+class FetchTool(Tool):
     def __init__(self, api_key: str):
         super().__init__(
             "Fetch the content of a web page given its URL. Use this tool when you need to access information from a specific web page.",
@@ -147,6 +176,17 @@ class BrowseTool(Tool):
         return response.json()
 
 
+def getcwd():
+    return os.getcwd().replace(os.path.expanduser("~"), "~")
+
+
+def system_message():
+    return {
+        "role": "system",
+        "content": f"You are a helpful assistant. Today's date is {datetime.datetime.now().strftime('%Y-%m-%d')}. Current working directory is {getcwd()}. The operating system is {str(os.uname())}.",
+    }
+
+
 def main(args: argparse.Namespace):
     history_file = os.path.expanduser("~/.qchat_history")
     if os.path.exists(history_file):
@@ -159,31 +199,23 @@ def main(args: argparse.Namespace):
     )
 
     tools = {
+        "chdir": ChdirTool(),
         "shell": ShellTool(),
         **(
             {
                 "search": SearchTool(api_key=args.jina_api_key),
-                "browse": BrowseTool(api_key=args.jina_api_key),
+                "fetch": FetchTool(api_key=args.jina_api_key),
             }
             if args.jina_api_key
             else {}
         ),
     }
 
-    system_message = {
-        "role": "system",
-        "content": f"You are a helpful assistant. Today's date is {datetime.datetime.now().strftime('%Y-%m-%d')}.",
-    }
-    messages = [system_message]
-
-    user_directory = os.path.expanduser("~")
-
+    messages = []
     while True:
-        if messages[-1]["role"] in ("assistant", "system"):
+        if not messages or messages[-1]["role"] == "assistant":
             try:
-                line = input(
-                    f"{args.model}:{os.getcwd().replace(user_directory, '~')}$ "
-                )
+                line = input(f"{args.model}:{getcwd()}$ ")
             except EOFError:
                 print()
                 break
@@ -203,7 +235,7 @@ def main(args: argparse.Namespace):
 
                 if cmd == "cd" or cmd.startswith("cd "):
                     parts = cmd.split(maxsplit=1)
-                    target = parts[1] if len(parts) > 1 else user_directory
+                    target = parts[1] if len(parts) > 1 else os.path.expanduser("~")
                     try:
                         os.chdir(os.path.expanduser(target))
                     except Exception as e:
@@ -220,7 +252,7 @@ def main(args: argparse.Namespace):
                 case "/exit" | "/quit":
                     break
                 case "/clear" | "/reset":
-                    messages = [system_message]
+                    messages = []
                     print("Chat history cleared.")
                     continue
 
@@ -229,7 +261,7 @@ def main(args: argparse.Namespace):
         try:
             response = client.chat.completions.create(
                 model=args.model,
-                messages=messages,
+                messages=[system_message(), *messages],
                 tools=[
                     {
                         "type": "function",
