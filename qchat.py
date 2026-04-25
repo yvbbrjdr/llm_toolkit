@@ -185,7 +185,11 @@ class FetchTool(Tool):
 
 
 def getcwd():
-    return os.getcwd().replace(os.path.expanduser("~"), "~")
+    while True:
+        try:
+            return os.getcwd().replace(os.path.expanduser("~"), "~")
+        except FileNotFoundError:
+            os.chdir("..")
 
 
 def system_message():
