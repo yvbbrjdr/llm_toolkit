@@ -55,7 +55,7 @@ class ChdirTool(Tool):
 
 
 class ShellTool(Tool):
-    def __init__(self):
+    def __init__(self, client: OpenAI, model: str):
         super().__init__(
             "Execute a shell command on the host and return its stdout and stderr. If you need to execute Python code for some task, use this tool.",
             {
@@ -70,16 +70,21 @@ class ShellTool(Tool):
                 "additionalProperties": False,
             },
         )
+        self._client = client
+        self._model = model
 
     def execute(self, args: dict) -> dict:
         command = args["command"]
-        try:
-            user_input = input(f"Allow execution of command: {command}? [Y/n] ")
-        except EOFError, KeyboardInterrupt:
-            print()
-            user_input = "n"
-        if user_input.strip().lower() not in ("y", "yes", ""):
-            return {"error": "Command execution cancelled by user."}
+        if not is_shell_command_readonly(command, self._client, self._model):
+            try:
+                user_input = input(f"Allow execution of command: {command}? [Y/n] ")
+            except EOFError, KeyboardInterrupt:
+                print()
+                user_input = "n"
+            if user_input.strip().lower() not in ("y", "yes", ""):
+                return {"error": "Command execution cancelled by user."}
+        else:
+            print(f"\033[90mExecuting command: {command}\033[0m")
 
         p = subprocess.Popen(
             command,
@@ -265,6 +270,50 @@ def is_shell_command(message: str, client: OpenAI, model: str) -> bool:
         return False
 
 
+def is_shell_command_readonly(message: str, client: OpenAI, model: str) -> bool:
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that determines whether a shell command is readonly or it modifies the system or has side effects.",
+                },
+                {
+                    "role": "user",
+                    "content": message,
+                },
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "is_command_readonly_response",
+                    "description": "Determines whether the input is a readonly shell command. Return true if it is a readonly command, false otherwise.",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "is_command_readonly": {
+                                "type": "boolean",
+                                "description": "Whether the input is a readonly shell command. Return true if it is a readonly command, false otherwise.",
+                            }
+                        },
+                        "required": ["is_command_readonly"],
+                        "additionalProperties": False,
+                    },
+                    "strict": True,
+                },
+            },
+        )
+        result = json.loads(response.choices[0].message.content)
+        return result.get("is_command_readonly", False)
+    except Exception as e:
+        print(
+            f"Error determining if message is readonly shell command: {e}",
+            file=sys.stderr,
+        )
+        return False
+
+
 def main(args: argparse.Namespace):
     history_file = os.path.expanduser("~/.qchat_history")
     if os.path.exists(history_file):
@@ -278,7 +327,7 @@ def main(args: argparse.Namespace):
 
     tools = {
         "chdir": ChdirTool(),
-        "shell": ShellTool(),
+        "shell": ShellTool(client, args.small_model),
         **(
             {
                 "search": SearchTool(api_key=args.jina_api_key),
