@@ -224,6 +224,47 @@ def system_message():
     }
 
 
+def is_shell_command(message: str, client: OpenAI, model: str) -> bool:
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that determines whether a string is a shell command or not, like a request or a sentence.",
+                },
+                {
+                    "role": "user",
+                    "content": message,
+                },
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "is_command_response",
+                    "description": "Determines whether the input is a shell command. Return true if it is a command, false otherwise.",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "is_command": {
+                                "type": "boolean",
+                                "description": "Whether the input is a shell command. Return true if it is a command, false otherwise.",
+                            }
+                        },
+                        "required": ["is_command"],
+                        "additionalProperties": False,
+                    },
+                    "strict": True,
+                },
+            },
+        )
+        result = json.loads(response.choices[0].message.content)
+        return result.get("is_command", False)
+    except Exception as e:
+        print(f"Error determining if message is shell command: {e}", file=sys.stderr)
+        return False
+
+
 def main(args: argparse.Namespace):
     history_file = os.path.expanduser("~/.qchat_history")
     if os.path.exists(history_file):
@@ -259,15 +300,30 @@ def main(args: argparse.Namespace):
             except KeyboardInterrupt:
                 print()
                 continue
-            if not line.strip():
-                continue
 
             stripped = line.strip()
+            if not stripped:
+                continue
 
-            if stripped.startswith("!"):
-                cmd = stripped[1:].strip()
+            match stripped:
+                case "/exit" | "/quit":
+                    break
+                case "/clear" | "/reset":
+                    messages = []
+                    print("Chat history cleared.")
+                    continue
+                case "/shell":
+                    shell = os.environ.get("SHELL", "/bin/sh")
+                    try:
+                        subprocess.run(shell)
+                    except Exception as e:
+                        print(f"Error launching shell: {e}", file=sys.stderr)
+
+            if stripped[0] == "!" or is_shell_command(
+                stripped, client, args.small_model
+            ):
+                cmd = stripped[1:] if stripped[0] == "!" else stripped
                 if not cmd:
-                    print("No command provided.")
                     continue
 
                 if cmd == "cd" or cmd.startswith("cd "):
@@ -288,14 +344,6 @@ def main(args: argparse.Namespace):
                         p.send_signal(subprocess.signal.SIGINT)
                         print()
                 continue
-
-            match stripped:
-                case "/exit" | "/quit":
-                    break
-                case "/clear" | "/reset":
-                    messages = []
-                    print("Chat history cleared.")
-                    continue
 
             messages.append({"role": "user", "content": line})
 
@@ -446,6 +494,12 @@ if __name__ == "__main__":
         type=str,
         default=os.environ.get("OPENAI_MODEL", "gpt-5.4"),
         help="Model to use",
+    )
+    parser.add_argument(
+        "--small-model",
+        type=str,
+        default=os.environ.get("OPENAI_SMALL_MODEL", "gpt-5.4-nano"),
+        help="Smaller model to use for easy decisions",
     )
     parser.add_argument(
         "--jina-api-key",
