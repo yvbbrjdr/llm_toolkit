@@ -12,6 +12,7 @@ import threading
 from typing import IO
 import urllib.parse
 
+import json_repair
 from openai import OpenAI
 import requests
 
@@ -263,7 +264,7 @@ def is_shell_command(message: str, client: OpenAI, model: str) -> bool:
                 },
             },
         )
-        result = json.loads(response.choices[0].message.content)
+        result = json_repair.loads(response.choices[0].message.content)
         return result.get("is_command", False)
     except Exception as e:
         print(f"Error determining if message is shell command: {e}", file=sys.stderr)
@@ -304,7 +305,7 @@ def is_shell_command_readonly(message: str, client: OpenAI, model: str) -> bool:
                 },
             },
         )
-        result = json.loads(response.choices[0].message.content)
+        result = json_repair.loads(response.choices[0].message.content)
         return result.get("is_command_readonly", False)
     except Exception as e:
         print(
@@ -499,7 +500,7 @@ def main(args: argparse.Namespace):
         if assistant_message.get("tool_calls"):
             for tool_call in assistant_message["tool_calls"]:
                 name = tool_call["function"]["name"]
-                arguments = json.loads(tool_call["function"]["arguments"])
+                arguments = json_repair.loads(tool_call["function"]["arguments"])
                 id = tool_call["id"]
                 tool = tools.get(name)
                 if not tool:
