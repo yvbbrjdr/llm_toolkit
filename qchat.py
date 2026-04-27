@@ -226,7 +226,7 @@ def getcwd():
 def system_message():
     return {
         "role": "system",
-        "content": f"You are a helpful assistant. Today's date is {datetime.datetime.now().strftime('%Y-%m-%d')}. Current working directory is {getcwd()}. The operating system is {str(os.uname())}.",
+        "content": f"You are QChat, an AI-assisted shell environment. Today's date is {datetime.datetime.now().strftime('%Y-%m-%d')}. Current working directory is {getcwd()}. The operating system is {str(os.uname())}.",
     }
 
 
