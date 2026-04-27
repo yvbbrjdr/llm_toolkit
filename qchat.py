@@ -547,7 +547,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--small-model",
         type=str,
-        default=os.environ.get("OPENAI_SMALL_MODEL", "gpt-5.4-nano"),
+        default=os.environ.get("OPENAI_SMALL_MODEL", "gpt-5.4-mini"),
         help="Smaller model to use for easy decisions",
     )
     parser.add_argument(
